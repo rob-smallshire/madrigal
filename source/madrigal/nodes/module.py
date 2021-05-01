@@ -1,7 +1,6 @@
 import ast
-from itertools import chain
 
-from les_iterables.augmenting import append, prepend, replace_at
+from les_iterables.augmenting import append, replace_at
 
 
 class OneShotAppendConstantExpressionStatementVisitor(ast.NodeTransformer):
@@ -22,39 +21,28 @@ class OneShotAppendConstantExpressionStatementVisitor(ast.NodeTransformer):
 
 
 class ManipNode:
-    def __init__(self, parent):
-        self._parent = parent
 
-    @property
-    def parent(self):
-        return self._parent
+    def __init__(self, root, path):
+        self._root = root
+        self._path = path
 
     @property
     def root(self):
-        node = self
-        while True:
-            parent = node.parent
-            if parent is None:
-                return node
-            node = parent
-
-
-class Module(ManipNode):
-    def __init__(self):
-        super().__init__(parent=None)
-        self._module = ast.Module(body=[])
+        return self._root
 
     @property
     def ast(self):
-        return self._module
+        # Follow the path from the root
+        node = self.root._ast_module()
+        for op, *args in self._path:
+            node = op(node, *args)
+        return node
 
-    def __getitem__(self, index):
-        expr_node = self._module.body[index]
-        assert isinstance(expr_node, ast.Expr)
-        return Expr(parent=self, node=expr_node)
+    def _ast_module(self):
+        raise NotImplementedError
 
-    def append_literal_expression_statement(self, i: int):
-        self._append_literal_int(i)
+    def _child_path(self, op, *args):
+        return tuple(append(self._path, (op, *args)))
 
     def _append_literal_int(self, i):
         visitor = OneShotAppendConstantExpressionStatementVisitor(i)
@@ -62,13 +50,31 @@ class Module(ManipNode):
         ast.fix_missing_locations(new_ast)
         self._module = new_ast
 
-    def _introduce_variable(self, node, identifier):
+    def _introduce_variable(self, manip_node, identifier):
         if not identifier.isidentifier():
             raise ValueError(f"{identifier!r} is not a valid identifier")
-        visitor = OneShotIntroduceVariableVisitor(expr=node, identifier=identifier)
+        visitor = OneShotIntroduceVariableVisitor(expr=manip_node.ast, identifier=identifier)
         new_ast = visitor.visit(self.root.ast)
         ast.fix_missing_locations(new_ast)
         self._module = new_ast
+
+
+class Module(ManipNode):
+    def __init__(self):
+        super().__init__(root=self, path=())
+        self._module = ast.Module(body=[])
+
+    def _ast_module(self):
+        return self._module
+
+    def __getitem__(self, index):
+        expr_node = self._module.body[index]
+        assert isinstance(expr_node, ast.Expr)
+        child_path = self._child_path(lambda node, i: node.body[i], index)
+        return Expr(root=self.root, path=child_path)
+
+    def append_literal_expression_statement(self, i: int):
+        self._append_literal_int(i)
 
 
 class OneShotIntroduceVariableVisitor(ast.NodeTransformer):
@@ -100,14 +106,8 @@ class OneShotIntroduceVariableVisitor(ast.NodeTransformer):
 
 
 class Expr(ManipNode):
-    def __init__(self, parent, node):
-        # TODO: Refer with a path
-        super().__init__(parent)
-        self._expr = node
-
-    @property
-    def ast(self):
-        return self._expr
+    def __init__(self, root, path):
+        super().__init__(root, path)
 
     def introduce_variable(self, identifier: str):
-        self.root._introduce_variable(self.ast, identifier)
+        self.root._introduce_variable(self, identifier)

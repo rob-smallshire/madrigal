@@ -70,6 +70,7 @@ class Module(ManipNode):
         ast.fix_missing_locations(new_ast)
         self._module = new_ast
 
+
 class OneShotIntroduceVariableVisitor(ast.NodeTransformer):
     def __init__(self, expr, identifier):
         self._name = ast.Name(id=identifier)
@@ -86,7 +87,9 @@ class OneShotIntroduceVariableVisitor(ast.NodeTransformer):
                 new_node = ast.Module(
                     list(
                         replace_at(
-                            node.body, index, ast.Assign(targets=[self._name], value=self._expr.value)
+                            node.body,
+                            index,
+                            ast.Assign(targets=[self._name], value=self._expr.value),
                         )
                     )
                 )
@@ -108,6 +111,3 @@ class Expr(ManipNode):
 
     def introduce_variable(self, identifier: str):
         self.root._introduce_variable(self.ast, identifier)
-
-
-

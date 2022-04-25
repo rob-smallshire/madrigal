@@ -2,7 +2,7 @@ import ast
 
 import astor
 
-from madrigal.nodes.module import Module
+from madrigal.manipulators import Module
 
 
 def test_module_constructor():
@@ -43,3 +43,20 @@ def test_introduce_variable():
         ],
     )
     assert astor.dump_tree(m.ast) == astor.dump_tree(expected_ast)
+
+
+def test_introduce_two_variables_and_replace_the_second_one():
+    m = Module()
+    # Imperative program transformations. Each statement navigates to a
+    # specific syntax element and performs one of the transformations
+    # available on that element
+    m.append_literal_expression_statement(76)
+    m.append_literal_expression_statement("Hello, World!")
+    m[0].introduce_variable("number")
+    m[1].introduce_variable("hello")
+    m[1].variable.replace("greeting")
+
+    assert m.to_source() == (
+        "number = 76\n"
+        "greeting = 'Hello, World!'\n"
+    )
